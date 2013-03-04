@@ -86,6 +86,14 @@ void pom_oom_internal(size_t size, char *file, unsigned int line);
 		abort();													\
 	}															\
 }
+
+
+// Checks if a given path exists or tries to create it
+int pom_check_path(char *path);
+
+// Expands a given path to an absolute path
+int pom_expand(const char *filename, char **result, const int buffsize);
+
 // Wrapper for open() which creates the directory structure
 int pom_open(const char *filename, int flags, mode_t mode);
 

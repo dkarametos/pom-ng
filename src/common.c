@@ -24,6 +24,7 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <fcntl.h>
+#include <wordexp.h>
 
 char *pom_strerror(int err_num) {
 
@@ -39,7 +40,6 @@ void pom_oom_internal(size_t size, char *file, unsigned int line) {
 	pomlog(POMLOG_ERR "Not enough memory to allocate %u bytes at %s:%u", size, file, line);
 }
 
-
 int pom_open(const char *filename, int flags, mode_t mode) {
 
 	if (strstr(filename, "..")) {
@@ -51,18 +51,26 @@ int pom_open(const char *filename, int flags, mode_t mode) {
 	buffer[NAME_MAX] = 0;
 	strncpy(buffer, filename, NAME_MAX);
 
-	char *slash = buffer;
-	if (*slash == '/') // we assume that the root directory exists :)
+	if(!pom_check_path(buffer)){
+		return -1;
+	}
+		
+	return open(buffer, flags, mode);
+}
+
+int pom_check_path(char *path) {
+	char *slash = path;
+	if (*slash == '/')
 		slash++;
-	
+
 	slash = strchr(slash, '/');
 	while (slash) {
 		*slash = 0;
 		struct stat stats;
-		if (stat(buffer, &stats)) {
+		if (stat(path, &stats)) {
 			switch (errno) {
 				case ENOENT:
-					mkdir(buffer, 00777);
+					mkdir(path, 00777);
 					break;
 				default:
 					return -1;
@@ -72,7 +80,21 @@ int pom_open(const char *filename, int flags, mode_t mode) {
 		slash = strchr(slash + 1, '/');
 	}
 
-	return open(buffer, flags, mode);
+	return POM_OK;
+}
+
+int pom_expand(const char *filename, char **result, const int buffsize) {
+	if (strstr(filename, "..")) {
+		pomlog(POMLOG_ERR "String '..' found in the filename");
+		return -1;
+	}
+
+	wordexp_t exp_result;
+	wordexp(filename, &exp_result, 0);
+
+	strncpy(*result, exp_result.we_wordv[0], buffsize);
+
+	return pom_check_path(*result);
 }
 
 int pom_write(int fd, const void *buf, size_t count) {
